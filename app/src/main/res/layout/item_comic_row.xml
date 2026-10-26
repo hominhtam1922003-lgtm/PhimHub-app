@@ -3,9 +3,10 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
-    app:cardCornerRadius="12dp"
-    app:cardElevation="2dp">
+    android:layout_margin="5dp"
+    app:cardBackgroundColor="@color/surface_card"
+    app:cardCornerRadius="14dp"
+    app:cardElevation="0dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -16,9 +17,10 @@
         <ImageView
             android:id="@+id/ivCoverRow"
             android:layout_width="54dp"
-            android:layout_height="74dp"
-            android:scaleType="centerCrop"
-            android:contentDescription="Ảnh bìa" />
+            android:layout_height="76dp"
+            android:background="@drawable/bg_poster"
+            android:contentDescription="Ảnh bìa"
+            android:scaleType="centerCrop" />
 
         <LinearLayout
             android:layout_width="0dp"
@@ -31,16 +33,28 @@
                 android:id="@+id/tvTitleRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:maxLines="2"
                 android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="@color/text_primary"
                 android:textSize="15sp"
                 android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvSourceBadgeRow"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:textColor="#FFFFFF"
+                android:textSize="9sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvSubRow"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="5dp"
+                android:textColor="@color/text_secondary"
                 android:textSize="13sp" />
         </LinearLayout>
     </LinearLayout>

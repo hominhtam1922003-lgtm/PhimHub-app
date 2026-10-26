@@ -2,14 +2,16 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/bg_main"
     android:orientation="vertical">
 
     <TextView
         android:id="@+id/tvEmpty"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="24dp"
         android:gravity="center"
+        android:padding="24dp"
+        android:textColor="@color/text_secondary"
         android:textSize="15sp"
         android:visibility="gone" />
 
@@ -17,5 +19,5 @@
         android:id="@+id/rvList"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="8dp" />
+        android:padding="6dp" />
 </LinearLayout>

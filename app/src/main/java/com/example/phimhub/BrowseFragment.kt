@@ -146,18 +146,19 @@ class BrowseFragment : Fragment() {
         }
     }
 
-    /** Lay 1 trang cua muc nay: phim le/bo di qua KKPhim, con lai qua cobephim. */
+    /** Lay 1 trang cua muc nay: le/bo/chieu rap GOP ca 2 nguon, muc tuy bien chi cobephim. */
     private fun fetchPage(page: Int): SearchPage {
         return when (kind) {
-            KIND_SINGLE -> KkSource.fetchList("phim-le", page)
-            KIND_SERIES -> KkSource.fetchList("phim-bo", page)
+            KIND_SINGLE -> Sources.browseMerged("phim-le", params, page)
+            KIND_SERIES -> Sources.browseMerged("phim-bo", params, page)
+            KIND_CINEMA -> Sources.browseMerged("phim-chieu-rap", params, page)
             else -> CobeSource.searchMovies(params, page)
         }
     }
 
     /** So phim toi da cua 1 trang o nguon cua muc nay (de nhan biet trang day). */
     private fun pageSize(): Int = when (kind) {
-        KIND_SINGLE, KIND_SERIES -> KkSource.PAGE_SIZE
+        KIND_SINGLE, KIND_SERIES, KIND_CINEMA -> KkSource.PAGE_SIZE
         else -> CobeSource.PAGE_SIZE
     }
 

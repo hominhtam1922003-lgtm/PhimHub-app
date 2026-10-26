@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="@color/bg_main">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,6 +15,7 @@
             android:layout_height="wrap_content"
             android:text="Thể loại"
             android:textSize="15sp"
+            android:textColor="@color/text_primary"
             android:textStyle="bold" />
 
         <com.google.android.material.chip.ChipGroup
@@ -28,6 +30,7 @@
             android:layout_marginTop="14dp"
             android:text="Quốc gia"
             android:textSize="15sp"
+            android:textColor="@color/text_primary"
             android:textStyle="bold" />
 
         <com.google.android.material.chip.ChipGroup
@@ -42,6 +45,7 @@
             android:layout_marginTop="14dp"
             android:text="Loại phim"
             android:textSize="15sp"
+            android:textColor="@color/text_primary"
             android:textStyle="bold" />
 
         <com.google.android.material.chip.ChipGroup
@@ -56,6 +60,7 @@
             android:layout_marginTop="14dp"
             android:text="Năm phát hành"
             android:textSize="15sp"
+            android:textColor="@color/text_primary"
             android:textStyle="bold" />
 
         <Spinner
@@ -70,6 +75,7 @@
             android:layout_marginTop="14dp"
             android:text="Sắp xếp"
             android:textSize="15sp"
+            android:textColor="@color/text_primary"
             android:textStyle="bold" />
 
         <com.google.android.material.chip.ChipGroup

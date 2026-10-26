@@ -7,6 +7,23 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 
+/** Gan huy hieu nguon (KK / Cobe) cho 1 the phim theo URL dinh danh. */
+fun bindSourceBadge(tv: TextView, url: String) {
+    when {
+        url.startsWith("kk://") -> {
+            tv.text = "KK"
+            tv.setBackgroundResource(R.drawable.bg_badge_kk)
+            tv.visibility = View.VISIBLE
+        }
+        url.contains("/phim/") -> {
+            tv.text = "Cobe"
+            tv.setBackgroundResource(R.drawable.bg_badge_cobe)
+            tv.visibility = View.VISIBLE
+        }
+        else -> tv.visibility = View.GONE
+    }
+}
+
 /** Luoi poster phim (dung lai layout item_comic_grid: anh + ten + dong phu). */
 class MovieGridAdapter(
     private var items: List<Movie>,
@@ -17,6 +34,7 @@ class MovieGridAdapter(
         val iv: ImageView = v.findViewById(R.id.ivCover)
         val tvTitle: TextView = v.findViewById(R.id.tvTitle)
         val tvSub: TextView = v.findViewById(R.id.tvLatest)
+        val tvBadge: TextView = v.findViewById(R.id.tvSourceBadge)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -29,6 +47,7 @@ class MovieGridAdapter(
         val m = items[position]
         holder.tvTitle.text = m.title
         holder.tvSub.text = m.sub
+        bindSourceBadge(holder.tvBadge, m.url)
         ImageLoader.cover(holder.iv, m.poster)
         holder.itemView.setOnClickListener { onClick(m) }
     }
@@ -52,6 +71,7 @@ class MovieRowAdapter(
         val iv: ImageView = v.findViewById(R.id.ivCoverRow)
         val tvTitle: TextView = v.findViewById(R.id.tvTitleRow)
         val tvSub: TextView = v.findViewById(R.id.tvSubRow)
+        val tvBadge: TextView = v.findViewById(R.id.tvSourceBadgeRow)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
@@ -64,6 +84,7 @@ class MovieRowAdapter(
         val m = items[position]
         holder.tvTitle.text = m.title
         holder.tvSub.text = subs[m.url] ?: m.sub
+        bindSourceBadge(holder.tvBadge, m.url)
         ImageLoader.cover(holder.iv, m.poster)
         holder.itemView.setOnClickListener { onClick(m) }
     }

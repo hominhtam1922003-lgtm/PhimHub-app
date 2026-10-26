@@ -75,6 +75,7 @@ class DetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvDetailTitle).text = preTitle
         if (prePoster.isNotEmpty()) {
             ImageLoader.cover(findViewById(R.id.ivDetailCover), prePoster)
+            ImageLoader.cover(findViewById(R.id.ivDetailBackdrop), prePoster)
         }
 
         rvEpisodes = findViewById(R.id.rvChapters)
@@ -153,6 +154,7 @@ class DetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvDetailTitle).text = d.movie.title
         if (d.movie.poster.isNotEmpty()) {
             ImageLoader.cover(findViewById(R.id.ivDetailCover), d.movie.poster)
+            ImageLoader.cover(findViewById(R.id.ivDetailBackdrop), d.movie.poster)
         }
         findViewById<TextView>(R.id.tvDetailMeta).text = d.meta
         findViewById<TextView>(R.id.tvDetailDesc).text = d.description
@@ -174,6 +176,7 @@ class DetailActivity : AppCompatActivity() {
         d.servers.forEachIndexed { idx, server ->
             val b = MaterialButton(this)
             b.text = server.name
+            b.cornerRadius = (16 * resources.displayMetrics.density).toInt()
             b.setOnClickListener { selectServer(idx) }
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,

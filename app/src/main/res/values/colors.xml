@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="tab_selected">#5B4BDB</color>
+    <color name="tab_selected">#7C6CFF</color>
     <color name="ic_launcher_background">#141433</color>
+    <color name="bg_main">#0A0A0F</color>
+    <color name="bg_bar">#0D0D14</color>
+    <color name="surface_card">#17171F</color>
+    <color name="surface_chip">#1E1E28</color>
+    <color name="text_primary">#F2F2F5</color>
+    <color name="text_secondary">#A7A5B5</color>
+    <color name="accent">#7C6CFF</color>
+    <color name="accent_cyan">#22D3EE</color>
+    <color name="badge_kk">#0E5A6D</color>
+    <color name="badge_cobe">#4A3FA3</color>
+    <color name="hairline">#23232E</color>
 </resources>

@@ -29,12 +29,12 @@ object ImageLoader {
 
     fun cover(iv: ImageView, url: String) {
         if (url.isEmpty()) {
-            iv.setImageResource(android.R.drawable.ic_menu_gallery)
+            iv.setImageResource(R.drawable.bg_poster)
             return
         }
         Glide.with(iv).load(glideUrl(url))
-            .placeholder(android.R.drawable.ic_menu_gallery)
-            .error(android.R.drawable.ic_menu_gallery)
+            .placeholder(R.drawable.bg_poster)
+            .error(R.drawable.bg_poster)
             .centerCrop()
             .into(iv)
     }

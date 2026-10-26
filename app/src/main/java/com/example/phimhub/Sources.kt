@@ -75,6 +75,37 @@ object Sources {
         return SearchPage(merged, totalPages, total)
     }
 
+    // ---------------- Duyet theo muc (gop 2 nguon) ----------------
+
+    /**
+     * 1 trang duyet phim gop ca 2 nguon cho cac tab Phim le / Phim bo /
+     * Chieu rap: KKPhim theo danh sach loai [kkType], cobephim theo
+     * [cobeParams]; trung tua (chuan hoa bo dau) chi giu 1 the, KKPhim
+     * xep truoc. 1 nguon loi trang nay thi nguon kia van tra ket qua.
+     */
+    fun browseMerged(kkType: String, cobeParams: Map<String, String>, page: Int): SearchPage {
+        var kk: SearchPage? = null
+        var cobe: SearchPage? = null
+        try {
+            kk = KkSource.fetchList(kkType, page)
+        } catch (e: Exception) {
+            // Nguon KK loi: dung cobe
+        }
+        try {
+            cobe = CobeSource.searchMovies(cobeParams, page)
+        } catch (e: Exception) {
+            // Nguon cobe loi: dung KK
+        }
+        if (kk == null && cobe == null) throw Exception("Ca 2 nguon deu loi")
+        val merged = ArrayList<Movie>()
+        val seen = HashSet<String>()
+        kk?.movies?.forEach { if (seen.add(normalizeTitle(it.title))) merged.add(it) }
+        cobe?.movies?.forEach { if (seen.add(normalizeTitle(it.title))) merged.add(it) }
+        val totalPages = maxOf(kk?.totalPages ?: page, cobe?.totalPages ?: page)
+        val total = (kk?.total ?: 0) + (cobe?.total ?: 0)
+        return SearchPage(merged, totalPages, total)
+    }
+
     // ---------------- Chi tiet gop 2 nguon ----------------
 
     /**

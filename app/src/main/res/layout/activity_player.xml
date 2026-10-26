@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/playerRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -17,13 +18,15 @@
         android:layout_height="wrap_content"
         android:layout_gravity="center" />
 
-    <Button
+    <com.google.android.material.button.MaterialButton
         android:id="@+id/btnServer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="top|end"
         android:layout_margin="10dp"
-        android:alpha="0.85"
+        android:alpha="0.92"
         android:text="Server 1/1 ⟳"
-        android:visibility="gone" />
+        android:visibility="gone"
+        app:backgroundTint="#26262F"
+        app:cornerRadius="20dp" />
 </FrameLayout>

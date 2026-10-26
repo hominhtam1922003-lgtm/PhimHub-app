@@ -67,6 +67,9 @@ class HomeFragment : Fragment() {
                     val m = item.movie
                     holder.itemView.findViewById<TextView>(R.id.tvTitle).text = m.title
                     holder.itemView.findViewById<TextView>(R.id.tvLatest).text = m.sub
+                    bindSourceBadge(
+                        holder.itemView.findViewById(R.id.tvSourceBadge), m.url
+                    )
                     ImageLoader.cover(
                         holder.itemView.findViewById(R.id.ivCover), m.poster
                     )

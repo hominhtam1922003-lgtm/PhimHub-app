@@ -82,17 +82,21 @@ class MainActivity : AppCompatActivity() {
         RemoteConfig.resolveAsync(applicationContext)
     }
 
-    /** To mau the dang chon (dam + mau chinh), cac the con lai ve xam. */
+    /** To mau the dang chon (chu + icon dam/mau chinh), cac the con lai xam. */
     private fun select(tab: TextView) {
         selectedTab = tab
         val primary = androidx.core.content.ContextCompat.getColor(this, R.color.tab_selected)
+        val idle = android.graphics.Color.parseColor("#8E8CA0")
         for (t in tabs) {
-            if (t == tab) {
-                t.setTextColor(primary)
-                t.setTypeface(null, Typeface.BOLD)
-            } else {
-                t.setTextColor(Color.GRAY)
-                t.setTypeface(null, Typeface.NORMAL)
+            val active = t == tab
+            val color = if (active) primary else idle
+            t.setTextColor(color)
+            t.setTypeface(null, if (active) Typeface.BOLD else Typeface.NORMAL)
+            val top = t.compoundDrawables.getOrNull(1)
+            if (top != null) {
+                val wrapped = androidx.core.graphics.drawable.DrawableCompat.wrap(top.mutate())
+                androidx.core.graphics.drawable.DrawableCompat.setTint(wrapped, color)
+                t.setCompoundDrawablesWithIntrinsicBounds(null, wrapped, null, null)
             }
         }
     }

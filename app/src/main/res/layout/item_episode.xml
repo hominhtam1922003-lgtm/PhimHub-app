@@ -4,7 +4,8 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_margin="4dp"
-    android:background="?attr/selectableItemBackground"
+    android:background="@drawable/bg_episode_chip"
     android:gravity="center"
-    android:padding="10dp"
+    android:padding="11dp"
+    android:textColor="@color/text_primary"
     android:textSize="14sp" />
