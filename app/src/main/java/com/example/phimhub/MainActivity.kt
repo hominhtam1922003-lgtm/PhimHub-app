@@ -32,7 +32,8 @@ class MainActivity : AppCompatActivity() {
             // Giu UA du phong trong CobeSource
         }
         setContentView(R.layout.activity_main)
-        // App da co toolbar rieng trong layout; tat action bar mac dinh
+        // Khong dung thanh tieu de: an action bar mac dinh, noi dung bat dau
+        // ngay tu o tim kiem / danh sach.
         // de khoi bi 2 thanh tieu de chong nhau
         supportActionBar?.hide()
 

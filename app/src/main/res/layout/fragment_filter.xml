@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/bg_main">
@@ -8,94 +9,142 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="14dp">
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:text="Lọc phim"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Vuốt ngang để xem hết thể loại / quốc gia, chọn xong bấm Lọc phim."
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:drawableStart="@drawable/bg_section_bar"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical"
             android:text="Thể loại"
-            android:textSize="15sp"
             android:textColor="@color/text_primary"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/cgGenres"
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/cgGenres"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleLine="true" />
+        </HorizontalScrollView>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="16dp"
+            android:drawableStart="@drawable/bg_section_bar"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical"
             android:text="Quốc gia"
-            android:textSize="15sp"
             android:textColor="@color/text_primary"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
-        <com.google.android.material.chip.ChipGroup
-            android:id="@+id/cgCountries"
+        <HorizontalScrollView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="8dp"
+            android:scrollbars="none">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/cgCountries"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleLine="true" />
+        </HorizontalScrollView>
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="16dp"
+            android:drawableStart="@drawable/bg_section_bar"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical"
             android:text="Loại phim"
-            android:textSize="15sp"
             android:textColor="@color/text_primary"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/cgType"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="16dp"
+            android:drawableStart="@drawable/bg_section_bar"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical"
             android:text="Năm phát hành"
-            android:textSize="15sp"
             android:textColor="@color/text_primary"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <Spinner
             android:id="@+id/spYear"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="8dp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="16dp"
+            android:drawableStart="@drawable/bg_section_bar"
+            android:drawablePadding="8dp"
+            android:gravity="center_vertical"
             android:text="Sắp xếp"
-            android:textSize="15sp"
             android:textColor="@color/text_primary"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/cgSort"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp" />
+            android:layout_marginTop="8dp" />
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnApplyFilter"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Lọc phim" />
+            android:layout_marginTop="20dp"
+            android:text="Lọc phim"
+            app:cornerRadius="12dp" />
 
         <TextView
             android:id="@+id/tvFilterCount"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="14dp"
+            android:textColor="@color/text_primary"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -119,6 +168,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Tải thêm phim"
-            android:visibility="gone" />
+            android:visibility="gone"
+            app:cornerRadius="12dp" />
     </LinearLayout>
 </androidx.core.widget.NestedScrollView>
