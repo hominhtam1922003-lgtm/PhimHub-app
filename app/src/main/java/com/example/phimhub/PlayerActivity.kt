@@ -140,6 +140,9 @@ class PlayerActivity : AppCompatActivity() {
     // Cac ung vien da bao loi (chan vong lap tu doi qua lai giua
     // cac ban cung chet)
     private val failedSet = HashSet<Int>()
+    // Cac ung vien da thu lai bang trinh phat WebView noi bo sau khi
+    // ExoPlayer loi (moi ung vien chi thu lai 1 lan)
+    private val webRetried = HashSet<Int>()
     private var errorToastShown = false
     // Danh dau moi lan doi ung vien: ket qua loc playlist (chay nen)
     // chi duoc ap dung neu chua doi sang ung vien khac
@@ -364,8 +367,13 @@ class PlayerActivity : AppCompatActivity() {
                 val item = androidx.media3.common.MediaItem.fromUri(
                     android.net.Uri.fromFile(f).toString()
                 )
+                // File playlist o may, nhung SEGMENT van tai qua
+                // mang: phai di qua dung factory co User-Agent +
+                // Referer cua nguon, khong thi CDN tra 403 -> mat
+                // hinh/loi phat (ban 1.4 dung factory mac dinh nen
+                // cac segment cua playlist da loc bi chan)
                 source = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(
-                    androidx.media3.datasource.DefaultDataSource.Factory(this)
+                    androidx.media3.datasource.DefaultDataSource.Factory(this, httpFactory)
                 ).createMediaSource(item)
             } else if (c.kind == Kind.HLS) {
                 val item = androidx.media3.common.MediaItem.fromUri(playUrl)
@@ -415,6 +423,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun resolveAndPlay() {
         progress.visibility = View.VISIBLE
         failedSet.clear()
+        webRetried.clear()
         val path = watchUrl.substringBefore("?").lowercase()
         when {
             path.endsWith(".m3u8") || path.endsWith(".mp4") -> {
@@ -516,7 +525,10 @@ class PlayerActivity : AppCompatActivity() {
         }
         for (u in versionUrls) {
             if (u == watchUrl || list.any { it.url == u }) continue
-            list.add(Candidate(kindOf(u), u, versionNameOf(u) ?: "Bản khác"))
+            val k = kindOf(u)
+            // Embed da biet chet (streamc) thi bo han khoi danh sach
+            if (k == Kind.EMBEDPAGE && VersionCheck.cached(u) == false) continue
+            list.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
         }
         return list
     }
@@ -724,12 +736,19 @@ class PlayerActivity : AppCompatActivity() {
             // "khong co nguon" nhu thoi nguon cu.
             val out = ArrayList<Candidate>()
             for (c in list) out.add(Candidate(c.kind, c.url, "Luồng trực tiếp"))
-            out.add(
-                Candidate(
-                    Kind.EMBEDPAGE, watchUrl,
-                    versionNameOf(watchUrl) ?: "Bản đang xem"
+            // Ban dang xem lam ung vien trang embed: neu tien kiem
+            // tra da ket luan no la embed CHET (streamc) thi dung
+            // dua vao — dua vao chi lam player vong toi roi dung o
+            // man hinh den cua trang chet (dung loi nguoi dung gap:
+            // app tu nhay qua ban Thuyet minh da chet)
+            if (VersionCheck.cached(watchUrl) != false) {
+                out.add(
+                    Candidate(
+                        Kind.EMBEDPAGE, watchUrl,
+                        versionNameOf(watchUrl) ?: "Bản đang xem"
+                    )
                 )
-            )
+            }
             for (u in versionUrls) {
                 if (u == watchUrl) continue
                 if (out.any { it.url == u }) continue
@@ -742,10 +761,17 @@ class PlayerActivity : AppCompatActivity() {
                     p.endsWith(".mp4") -> Kind.DIRECT
                     else -> Kind.EMBEDPAGE
                 }
+                // Embed da biet chet thi bo han khoi danh sach
+                if (k == Kind.EMBEDPAGE && VersionCheck.cached(u) == false) continue
                 out.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
             }
             candidates = out
             failedSet.clear()
+            webRetried.clear()
+            if (out.isEmpty()) {
+                showNoSource()
+                return
+            }
             playCandidate(0)
         }
 
@@ -841,7 +867,7 @@ class PlayerActivity : AppCompatActivity() {
         return if (idx >= 0) versionNames.getOrNull(idx) else null
     }
 
-    private fun playCandidate(index: Int) {
+    private fun playCandidate(index: Int, viaWeb: Boolean = false) {
         if (index !in candidates.indices) return
         candidateIndex = index
         val c = candidates[index]
@@ -876,20 +902,40 @@ class PlayerActivity : AppCompatActivity() {
                 // (chay nen; playlist sach/khong loc duoc thi phat
                 // thang nhu cu - xem PlaylistCleaner), roi phat bang
                 // ExoPlayer (giai ma phan cung, dem sau, muot hon han
-                // trinh phat WebView cu)
+                // trinh phat WebView cu). viaWeb = ExoPlayer da loi
+                // o luong nay, thu lai bang trinh phat WebView noi bo
                 val token = ++playToken
                 thread {
                     val res = PlaylistCleaner.clean(c.url, watchUrl)
                     runOnUiThread {
                         if (token == playToken && !isFinishing) {
-                            playExo(c, res.playUrl, res.overrideText)
+                            if (viaWeb) {
+                                stopExo()
+                                webView.visibility = View.VISIBLE
+                                webView.loadDataWithBaseURL(
+                                    CobeSource.BASE + "/",
+                                    hlsHtml(res.playUrl, res.overrideText),
+                                    "text/html", "utf-8", null
+                                )
+                            } else {
+                                playExo(c, res.playUrl, res.overrideText)
+                            }
                         }
                     }
                 }
             }
             Kind.DIRECT -> {
                 targetHost = ""
-                playExo(c, c.url, null)
+                if (viaWeb) {
+                    stopExo()
+                    webView.visibility = View.VISIBLE
+                    webView.loadDataWithBaseURL(
+                        CobeSource.BASE + "/", directHtml(c.url),
+                        "text/html", "utf-8", null
+                    )
+                } else {
+                    playExo(c, c.url, null)
+                }
             }
         }
     }
@@ -901,6 +947,17 @@ class PlayerActivity : AppCompatActivity() {
      * (khong nhay vong tron vo han).
      */
     private fun handleCandidateError() {
+        val cur = candidates.getOrNull(candidateIndex)
+        if (cur != null && (cur.kind == Kind.HLS || cur.kind == Kind.DIRECT) &&
+            webRetried.add(candidateIndex)
+        ) {
+            // ExoPlayer loi o luong nay (tren may ao LDPlayer thuong
+            // do giai ma/surface yeu): thu lai CHINH luong nay bang
+            // trinh phat WebView noi bo — duong phat da chay muot o
+            // cac ban truoc — truoc khi danh dau chet va doi server
+            playCandidate(candidateIndex, viaWeb = true)
+            return
+        }
         failedSet.add(candidateIndex)
         if (candidates.size <= 1 || failedSet.size >= candidates.size) {
             if (!errorToastShown) {
