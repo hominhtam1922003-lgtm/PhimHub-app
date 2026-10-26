@@ -38,6 +38,13 @@ object PlaylistCleaner {
     private fun cleanInner(url: String, referer: String): Result {
         val text = fetch(url, referer) ?: return Result(url, null)
         if (text.contains("#EXT-X-STREAM-INF")) {
+            // Am thanh TACH rendition rieng (EXT-X-MEDIA TYPE=AUDIO):
+            // cat QC bang cach phat thang media playlist cua variant se
+            // lam MAT TIENG. Truong hop nay giu nguyen master goc —
+            // loc QC chi giup khi khong lam hong nguon.
+            if (text.contains("#EXT-X-MEDIA") && text.contains("TYPE=AUDIO")) {
+                return Result(url, null)
+            }
             // Playlist tong (master): kiem tra playlist con dau tien.
             // Con sach -> phat master goc (giu co che chon chat
             // luong); con bi ghep QC -> phat ban da loc cua con.

@@ -123,6 +123,8 @@ class PlayerActivity : AppCompatActivity() {
     private data class Candidate(val kind: Kind, val url: String, val label: String = "")
 
     private lateinit var webView: WebView
+    private lateinit var exoView: androidx.media3.ui.PlayerView
+    private var exoPlayer: androidx.media3.exoplayer.ExoPlayer? = null
     private lateinit var progress: ProgressBar
     private lateinit var btnServer: Button
     private var customView: View? = null
@@ -134,6 +136,10 @@ class PlayerActivity : AppCompatActivity() {
     private var versionNames: List<String> = emptyList()
     private var candidates: List<Candidate> = emptyList()
     private var candidateIndex = 0
+    private var currentKind: Kind? = null
+    // Cac ung vien da bao loi (chan vong lap tu doi qua lai giua
+    // cac ban cung chet)
+    private val failedSet = HashSet<Int>()
     private var errorToastShown = false
     // Danh dau moi lan doi ung vien: ket qua loc playlist (chay nen)
     // chi duoc ap dung neu chua doi sang ung vien khac
@@ -182,11 +188,11 @@ class PlayerActivity : AppCompatActivity() {
             loadWithOverviewMode = true
             useWideViewPort = true
         }
-        // Trang HLS noi bo bao loi phat ve day de tu doi server
+        // Trang phat noi bo bao loi ve day de tu doi server
         webView.addJavascriptInterface(object {
             @JavascriptInterface
             fun onError() {
-                runOnUiThread { nextCandidate(auto = true) }
+                runOnUiThread { handleCandidateError() }
             }
         }, "PlayerBridge")
 
@@ -196,6 +202,40 @@ class PlayerActivity : AppCompatActivity() {
                 view: WebView?, isDialog: Boolean, isUserGesture: Boolean,
                 resultMsg: android.os.Message?
             ): Boolean = false
+
+            // Nuot moi hop thoai JS cua trang embed: truoc day hop
+            // thoai tho cua web (JW Player bao "Setup error:") hien
+            // thang len nguoi dung. Hop thoai bao LOI khi dang phat
+            // bang trang embed = ban nay chet -> tu doi ung vien khac
+            override fun onJsAlert(
+                view: WebView?, url: String?, message: String?,
+                result: android.webkit.JsResult?
+            ): Boolean {
+                result?.cancel()
+                val msg = message?.lowercase() ?: ""
+                if (currentKind == Kind.EMBEDPAGE &&
+                    (msg.contains("error") || msg.contains("fail"))
+                ) {
+                    handleCandidateError()
+                }
+                return true
+            }
+
+            override fun onJsConfirm(
+                view: WebView?, url: String?, message: String?,
+                result: android.webkit.JsResult?
+            ): Boolean {
+                result?.cancel()
+                return true
+            }
+
+            override fun onJsPrompt(
+                view: WebView?, url: String?, message: String?,
+                defaultValue: String?, result: android.webkit.JsPromptResult?
+            ): Boolean {
+                result?.cancel()
+                return true
+            }
 
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
                 customView = view
@@ -258,7 +298,92 @@ class PlayerActivity : AppCompatActivity() {
             }
         }
 
+        // Player GOC (ExoPlayer) cho luong thang: dem toi 90 giay de
+        // mang yeu cung it dung hinh, san sang phat sau 1,5 giay dem
+        exoView = findViewById(R.id.exoPlayer)
+        exoView.controllerShowTimeoutMs = 3500
+        exoView.resizeMode = androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+        exoView.setShowBuffering(androidx.media3.ui.PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+        val loadControl = androidx.media3.exoplayer.DefaultLoadControl.Builder()
+            .setBufferDurationsMs(20_000, 90_000, 1_500, 3_000)
+            .build()
+        exoPlayer = androidx.media3.exoplayer.ExoPlayer.Builder(this)
+            .setLoadControl(loadControl)
+            .build().also { p ->
+                exoView.player = p
+                p.addListener(object : androidx.media3.common.Player.Listener {
+                    override fun onPlayerError(
+                        error: androidx.media3.common.PlaybackException
+                    ) {
+                        runOnUiThread { handleCandidateError() }
+                    }
+
+                    override fun onPlaybackStateChanged(state: Int) {
+                        when (state) {
+                            androidx.media3.common.Player.STATE_READY ->
+                                progress.visibility = View.GONE
+                            androidx.media3.common.Player.STATE_BUFFERING ->
+                                progress.visibility = View.VISIBLE
+                        }
+                    }
+                })
+            }
+
         resolveAndPlay()
+    }
+
+    /** Dung ExoPlayer (chuyen sang trang embed thi phai tha luong cu). */
+    private fun stopExo() {
+        try {
+            exoPlayer?.stop()
+            exoPlayer?.clearMediaItems()
+        } catch (e: Exception) {
+            // bo qua
+        }
+        exoView.visibility = View.GONE
+    }
+
+    /** Phat 1 luong thang bang ExoPlayer (HLS hoac file thang). */
+    private fun playExo(c: Candidate, playUrl: String, overrideText: String?) {
+        val p = exoPlayer ?: return
+        webView.visibility = View.GONE
+        exoView.visibility = View.VISIBLE
+        val httpFactory = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setUserAgent(CobeSource.UA)
+            .setDefaultRequestProperties(mapOf("Referer" to (CobeSource.BASE + "/")))
+            .setConnectTimeoutMs(10_000)
+            .setReadTimeoutMs(15_000)
+            .setAllowCrossProtocolRedirects(true)
+        try {
+            val source: androidx.media3.exoplayer.source.MediaSource
+            if (overrideText != null) {
+                // Playlist da loc QC: ghi ra file tam trong may (cac
+                // segment ben trong deu la URL tuyet doi) roi phat
+                val f = java.io.File(cacheDir, "cleaned_playlist.m3u8")
+                f.writeText(overrideText)
+                val item = androidx.media3.common.MediaItem.fromUri(
+                    android.net.Uri.fromFile(f).toString()
+                )
+                source = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(
+                    androidx.media3.datasource.DefaultDataSource.Factory(this)
+                ).createMediaSource(item)
+            } else if (c.kind == Kind.HLS) {
+                val item = androidx.media3.common.MediaItem.fromUri(playUrl)
+                source = androidx.media3.exoplayer.hls.HlsMediaSource.Factory(
+                    httpFactory
+                ).createMediaSource(item)
+            } else {
+                val item = androidx.media3.common.MediaItem.fromUri(playUrl)
+                source = androidx.media3.exoplayer.source.ProgressiveMediaSource.Factory(
+                    httpFactory
+                ).createMediaSource(item)
+            }
+            p.setMediaSource(source)
+            p.prepare()
+            p.playWhenReady = true
+        } catch (e: Exception) {
+            handleCandidateError()
+        }
     }
 
     /** Trang noi bo phat file video truc tiep (.mp4) bang the video chuan. */
@@ -289,15 +414,79 @@ class PlayerActivity : AppCompatActivity() {
      */
     private fun resolveAndPlay() {
         progress.visibility = View.VISIBLE
+        failedSet.clear()
         val path = watchUrl.substringBefore("?").lowercase()
         when {
             path.endsWith(".m3u8") || path.endsWith(".mp4") -> {
                 candidates = directCandidates()
                 playCandidate(0)
             }
-            watchUrl.contains("/embed/") -> probeRuntime()
+            watchUrl.contains("/embed/") -> preCheckVersionsThenProbe()
             else -> showNoSource()
         }
+    }
+
+    /**
+     * TIEN KIEM TRA BAN CHIEU truoc khi do nguon (chuyen tu ban
+     * OneHub v2.0.0 — da kiem chung tren may that):
+     * Mot so ban chieu (Vietsub/Thuyet minh cua mot so tap) duoc nguon
+     * tro sang trang embed streamc da bi chan — player cua web chet o
+     * loi "Setup error"/102630, khong co luong that (kiem chung song
+     * 26/10 tren Bac Si X tap 1 + 6: ca Vietsub #1 lan Thuyet minh #1
+     * deu la streamc, chi Song ngu la luong thang). Trang embed chinh
+     * thuc chua san truong encrypted_url; giai ma ngay trong app de
+     * biet ban nao la LUONG THANG (.m3u8/.mp4), ban nao la EMBED CHET.
+     * Neu ban dang chon la embed chet con ban khac la luong thang thi
+     * tu chuyen sang ban thang truoc khi do. Khong phan loai duoc
+     * (mat mang/timeout) thi giu nguyen hanh vi cu.
+     */
+    private fun preCheckVersionsThenProbe() {
+        val urls = (listOf(watchUrl) + versionUrls).distinct()
+        if (urls.size <= 1) {
+            probeRuntime()
+            return
+        }
+        progress.visibility = View.VISIBLE
+        // Cache da lam am tu man chi tiet (VersionCheck): co san thi
+        // quyet dinh ngay, chi phan loai truc tiep cac URL con thieu
+        val direct = java.util.concurrent.ConcurrentHashMap<String, Boolean>()
+        for (u in urls) VersionCheck.cached(u)?.let { direct[u] = it }
+        val missing = urls.filter { !direct.containsKey(it) }
+        if (missing.isEmpty()) {
+            decideProbeTarget(urls, direct)
+            return
+        }
+        thread {
+            val workers = missing.map { u ->
+                thread {
+                    val cls = VersionCheck.classify(u)
+                    if (cls != null) direct[u] = cls
+                }
+            }
+            val deadline = System.currentTimeMillis() + 6000
+            for (w in workers) {
+                val wait = deadline - System.currentTimeMillis()
+                if (wait > 0) try {
+                    w.join(wait)
+                } catch (e: InterruptedException) {
+                    // bo qua
+                }
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                decideProbeTarget(urls, direct)
+            }
+        }
+    }
+
+    /** Ban dang chon la embed chet ma co ban luong thang: chuyen sang. */
+    private fun decideProbeTarget(urls: List<String>, direct: Map<String, Boolean>) {
+        val selectedBlocked = direct[watchUrl] == false
+        val firstDirect = urls.firstOrNull { direct[it] == true }
+        if (selectedBlocked && firstDirect != null && firstDirect != watchUrl) {
+            watchUrl = firstDirect
+        }
+        probeRuntime()
     }
 
     /**
@@ -400,6 +589,32 @@ class PlayerActivity : AppCompatActivity() {
                 view: WebView?, isDialog: Boolean, isUserGesture: Boolean,
                 resultMsg: android.os.Message?
             ): Boolean = false
+
+            // WebView do la WebView ngam: nuot hop thoai JS de trang
+            // embed loi khong bat hop thoai tho ra man hinh
+            override fun onJsAlert(
+                view: WebView?, url: String?, message: String?,
+                result: android.webkit.JsResult?
+            ): Boolean {
+                result?.cancel()
+                return true
+            }
+
+            override fun onJsConfirm(
+                view: WebView?, url: String?, message: String?,
+                result: android.webkit.JsResult?
+            ): Boolean {
+                result?.cancel()
+                return true
+            }
+
+            override fun onJsPrompt(
+                view: WebView?, url: String?, message: String?,
+                defaultValue: String?, result: android.webkit.JsPromptResult?
+            ): Boolean {
+                result?.cancel()
+                return true
+            }
         }
         probe.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
@@ -530,6 +745,7 @@ class PlayerActivity : AppCompatActivity() {
                 out.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
             }
             candidates = out
+            failedSet.clear()
             playCandidate(0)
         }
 
@@ -586,26 +802,26 @@ class PlayerActivity : AppCompatActivity() {
                 }
                 val netCount = synchronized(netHls) { netHls.size }
                 val netQuiet = lastNetAt.get() > 0 &&
-                    System.currentTimeMillis() - lastNetAt.get() > 8000
+                    System.currentTimeMillis() - lastNetAt.get() > 5000
                 when {
                     // Da thay phim that (dai >= 180 giay): phat ngay
                     movieUrl.isNotEmpty() -> finishProbe()
                     // Player da tai san playlist phim (khac luong quang
                     // cao dang phat) va da quan sat du lau: dung luon
                     resHls.isNotEmpty() && !adUrls.contains(resHls) &&
-                        adUrls.isNotEmpty() && elapsed > 15000 -> finishProbe()
+                        adUrls.isNotEmpty() && elapsed > 12000 -> finishProbe()
                     // Luong o tang mang da on dinh (8 giay khong co
                     // luong moi): player da chot nguon -> phat
-                    netCount > 0 && netQuiet && elapsed > 12000 -> finishProbe()
+                    netCount > 0 && netQuiet && elapsed > 8000 -> finishProbe()
                     elapsed > 45000 -> finishProbe()
-                    else -> handler.postDelayed({ pollProbe() }, 2000)
+                    else -> handler.postDelayed({ pollProbe() }, 1000)
                 }
             }
         }
 
         probe.loadUrl(watchUrl)
-        handler.postDelayed({ pollProbe() }, 2500)
-        handler.postDelayed({ finishProbe() }, 50000)
+        handler.postDelayed({ pollProbe() }, 2000)
+        handler.postDelayed({ finishProbe() }, 45000)
     }
 
     /** Khong boc duoc nguon sach o moi duong -> bao ro, khong mo trang web. */
@@ -629,6 +845,7 @@ class PlayerActivity : AppCompatActivity() {
         if (index !in candidates.indices) return
         candidateIndex = index
         val c = candidates[index]
+        currentKind = c.kind
         btnServer.text = if (c.label.isNotEmpty()) {
             "${c.label} • ${index + 1}/${candidates.size} ⟳"
         } else {
@@ -642,6 +859,8 @@ class PlayerActivity : AppCompatActivity() {
                 // da khoa: cam popup (onCreateWindow), khoa khung chinh
                 // theo host trang phat (shouldOverrideUrlLoading dung
                 // targetHost), AdBlock o tang mang
+                stopExo()
+                webView.visibility = View.VISIBLE
                 targetHost = hostOf(c.url)
                 webView.loadUrl(
                     c.url,
@@ -655,28 +874,51 @@ class PlayerActivity : AppCompatActivity() {
                 targetHost = ""
                 // Loc quang cao ghep trong playlist truoc khi phat
                 // (chay nen; playlist sach/khong loc duoc thi phat
-                // thang nhu cu - xem PlaylistCleaner)
+                // thang nhu cu - xem PlaylistCleaner), roi phat bang
+                // ExoPlayer (giai ma phan cung, dem sau, muot hon han
+                // trinh phat WebView cu)
                 val token = ++playToken
                 thread {
                     val res = PlaylistCleaner.clean(c.url, watchUrl)
                     runOnUiThread {
                         if (token == playToken && !isFinishing) {
-                            webView.loadDataWithBaseURL(
-                                CobeSource.BASE + "/",
-                                hlsHtml(res.playUrl, res.overrideText),
-                                "text/html", "utf-8", null
-                            )
+                            playExo(c, res.playUrl, res.overrideText)
                         }
                     }
                 }
             }
             Kind.DIRECT -> {
                 targetHost = ""
-                webView.loadDataWithBaseURL(
-                    CobeSource.BASE + "/", directHtml(c.url), "text/html", "utf-8", null
-                )
+                playExo(c, c.url, null)
             }
         }
+    }
+
+    /**
+     * 1 ung vien phat loi (player noi bo bao loi, trang embed bao
+     * "Setup error", ExoPlayer bao loi): danh dau chet va nhay sang
+     * ung vien chua tung loi; tat ca deu loi thi bao 1 lan roi dung
+     * (khong nhay vong tron vo han).
+     */
+    private fun handleCandidateError() {
+        failedSet.add(candidateIndex)
+        if (candidates.size <= 1 || failedSet.size >= candidates.size) {
+            if (!errorToastShown) {
+                errorToastShown = true
+                Toast.makeText(
+                    this,
+                    "Bản này lỗi phát. Thử bản chiếu khác hoặc tập khác nhé.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            return
+        }
+        Toast.makeText(this, "Server lỗi, đang đổi server khác...", Toast.LENGTH_SHORT).show()
+        var next = candidateIndex
+        do {
+            next = (next + 1) % candidates.size
+        } while (failedSet.contains(next))
+        playCandidate(next)
     }
 
     private fun nextCandidate(auto: Boolean) {
@@ -763,6 +1005,11 @@ class PlayerActivity : AppCompatActivity() {
         } catch (e: Exception) {
             // bo qua
         }
+        try {
+            exoPlayer?.pause()
+        } catch (e: Exception) {
+            // bo qua
+        }
     }
 
     override fun onResume() {
@@ -775,6 +1022,12 @@ class PlayerActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            exoPlayer?.release()
+        } catch (e: Exception) {
+            // bo qua
+        }
+        exoPlayer = null
         try {
             webView.stopLoading()
             webView.destroy()

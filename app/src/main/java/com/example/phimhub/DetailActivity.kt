@@ -31,6 +31,17 @@ class DetailActivity : AppCompatActivity() {
     private var preTitle: String = ""
     private var currentServer = 0
 
+    // Tai chi tiet 2 PHA: nguon chinh ve truoc la hien ngay (meta +
+    // danh sach tap + nut Xem ngay), ban sinh doi cua nguon kia ghep
+    // them nhom server khi tai xong — truoc day cho ca 2 nguon xong
+    // moi hien nen mo phim nao cung quay lau
+    private var primaryDetail: MovieDetail? = null
+    private var twinDetail: MovieDetail? = null
+    private var primarySettled = false
+    private var twinSettled = false
+    private var detailShown = false
+    private var twinMergedIn = false
+
     private lateinit var rvEpisodes: RecyclerView
     private lateinit var epAdapter: EpisodeAdapter
 
@@ -75,7 +86,7 @@ class DetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvDetailTitle).text = preTitle
         if (prePoster.isNotEmpty()) {
             ImageLoader.cover(findViewById(R.id.ivDetailCover), prePoster)
-            ImageLoader.cover(findViewById(R.id.ivDetailBackdrop), prePoster)
+            ImageLoader.backdrop(findViewById(R.id.ivDetailBackdrop), prePoster)
         }
 
         rvEpisodes = findViewById(R.id.rvChapters)
@@ -123,27 +134,107 @@ class DetailActivity : AppCompatActivity() {
 
     private fun loadDetail() {
         findViewById<ProgressBar>(R.id.detailProgress).visibility = View.VISIBLE
+        val primaryIsKk = Sources.isKk(movieUrl)
+        // Ban sinh doi: chay ngam song song tu dau, tim bang tua the
         thread {
-            RemoteConfig.awaitReady(2500)
-            var d: MovieDetail? = null
+            var t: MovieDetail? = null
             try {
-                d = Sources.fetchDetailMerged(movieUrl, preTitle)
+                t = Sources.fetchTwin(preTitle, primaryIsKk)
             } catch (e: Exception) {
-                // Bao loi o duoi
+                // Khong co ban sinh doi: dung 1 nguon
             }
             runOnUiThread {
-                if (d != null && d.servers.isNotEmpty()) {
-                    showDetail(d)
-                } else {
-                    findViewById<ProgressBar>(R.id.detailProgress).visibility = View.GONE
-                    Toast.makeText(
-                        this,
-                        "Không tải được danh sách tập. Kiểm tra mạng rồi mở lại phim nhé.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
+                twinDetail = t
+                twinSettled = true
+                onDetailPartReady(primaryIsKk)
             }
         }
+        // Nguon chinh: ve den dau hien den do
+        thread {
+            RemoteConfig.awaitReady(1500)
+            var p: MovieDetail? = null
+            try {
+                p = Sources.fetchPrimary(movieUrl)
+            } catch (e: Exception) {
+                // Con duong lui bang ban sinh doi o onDetailPartReady
+            }
+            runOnUiThread {
+                primaryDetail = p
+                primarySettled = true
+                onDetailPartReady(primaryIsKk)
+            }
+        }
+    }
+
+    private fun onDetailPartReady(primaryIsKk: Boolean) {
+        if (isFinishing || isDestroyed) return
+        if (!detailShown) {
+            when {
+                primaryDetail != null &&
+                    (primaryDetail!!.servers.isNotEmpty() || twinSettled) -> {
+                    detailShown = true
+                    twinMergedIn = twinSettled && twinDetail != null
+                    showDetail(
+                        Sources.mergeDetails(
+                            primaryDetail, primaryIsKk,
+                            if (twinMergedIn) twinDetail else null
+                        )
+                    )
+                }
+                primarySettled && twinSettled -> {
+                    if (twinDetail != null) {
+                        // Nguon chinh loi: dung ban sinh doi lam chinh
+                        detailShown = true
+                        twinMergedIn = true
+                        showDetail(Sources.mergeDetails(null, primaryIsKk, twinDetail))
+                    } else {
+                        showLoadError()
+                    }
+                }
+                else -> {
+                    // Nguon chinh loi, ban sinh doi chua ve: giu vong xoay
+                }
+            }
+        } else if (!twinMergedIn && twinSettled && twinDetail != null &&
+            primaryDetail != null
+        ) {
+            // Ghep them nhom server cua nguon kia vao man dang hien,
+            // giu nguyen ban dang chon
+            twinMergedIn = true
+            val merged = Sources.mergeDetails(primaryDetail, primaryIsKk, twinDetail)
+            detail = merged
+            findViewById<TextView>(R.id.tvChapterCount).text =
+                "Danh sách tập (${merged.totalEpisodes} tập)"
+            if (db.isFavorite(movieUrl)) {
+                db.updateFavoriteEpisodeCount(movieUrl, merged.totalEpisodes)
+            }
+            buildServerButtons(merged)
+            val keep = minOf(currentServer, merged.servers.size - 1).coerceAtLeast(0)
+            selectServer(keep)
+            warmVersions(merged)
+        }
+    }
+
+    private fun showLoadError() {
+        findViewById<ProgressBar>(R.id.detailProgress).visibility = View.GONE
+        Toast.makeText(
+            this,
+            "Không tải được danh sách tập. Kiểm tra mạng rồi mở lại phim nhé.",
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    /**
+     * Lam am phan loai ban chieu cho tap dau cua moi nhom server:
+     * nguoi dung bam Xem la player biet ngay ban nao song/chet,
+     * khoi mat vai giay phan loai lai (xem VersionCheck).
+     */
+    private fun warmVersions(d: MovieDetail) {
+        val urls = ArrayList<String>()
+        for (g in d.servers) {
+            g.episodes.firstOrNull()?.let { urls.add(it.url) }
+        }
+        if (urls.isNotEmpty()) VersionCheck.warm(urls)
     }
 
     private fun showDetail(d: MovieDetail) {
@@ -154,7 +245,7 @@ class DetailActivity : AppCompatActivity() {
         findViewById<TextView>(R.id.tvDetailTitle).text = d.movie.title
         if (d.movie.poster.isNotEmpty()) {
             ImageLoader.cover(findViewById(R.id.ivDetailCover), d.movie.poster)
-            ImageLoader.cover(findViewById(R.id.ivDetailBackdrop), d.movie.poster)
+            ImageLoader.backdrop(findViewById(R.id.ivDetailBackdrop), d.movie.poster)
         }
         findViewById<TextView>(R.id.tvDetailMeta).text = d.meta
         findViewById<TextView>(R.id.tvDetailDesc).text = d.description
@@ -165,6 +256,7 @@ class DetailActivity : AppCompatActivity() {
         }
         buildServerButtons(d)
         selectServer(0)
+        warmVersions(d)
     }
 
     private fun buildServerButtons(d: MovieDetail) {

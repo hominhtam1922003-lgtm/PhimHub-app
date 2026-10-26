@@ -97,6 +97,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         ensureNotificationPermission()
+        ensureBatteryExemption()
         scheduleNewEpisodeChecks()
         // Xac dinh ten mien nguon dang song (chong web doi ten mien)
         RemoteConfig.resolveAsync(applicationContext)
@@ -149,6 +150,31 @@ class MainActivity : AppCompatActivity() {
             checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 100)
+        }
+    }
+
+    /**
+     * Xin mien toi uu pin (1 lan duy nhat): nhieu may (nhat la Xiaomi)
+     * giet viec kiem tra tap moi o nen, thong bao khong bao gio den
+     * du da cap quyen. Da mien roi thi thoi; da hoi 1 lan thi khong
+     * hoi lai (tranh lam phien).
+     */
+    fun ensureBatteryExemption() {
+        try {
+            val pm = getSystemService(android.content.Context.POWER_SERVICE)
+                as android.os.PowerManager
+            if (pm.isIgnoringBatteryOptimizations(packageName)) return
+            val prefs = getSharedPreferences("app_state", MODE_PRIVATE)
+            if (prefs.getBoolean("battery_prompt_shown", false)) return
+            prefs.edit().putBoolean("battery_prompt_shown", true).apply()
+            val intent = android.content.Intent(
+                android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                android.net.Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+        } catch (e: Exception) {
+            // May khong co man hinh nay thi bo qua: viec nen van chay
+            // theo lich WorkManager nhu cu
         }
     }
 

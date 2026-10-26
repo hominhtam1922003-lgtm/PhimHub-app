@@ -12,6 +12,16 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- Player goc cho luong thang (m3u8/mp4): giai ma phan cung +
+         dem sau, phat muot hon han trinh phat WebView/hls.js cu.
+         Trang embed van phat bang WebView o tren. -->
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/exoPlayer"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#000000"
+        android:visibility="gone" />
+
     <ProgressBar
         android:id="@+id/playerProgress"
         android:layout_width="wrap_content"

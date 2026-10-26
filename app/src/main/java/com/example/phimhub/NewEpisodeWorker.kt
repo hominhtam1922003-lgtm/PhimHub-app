@@ -49,9 +49,18 @@ class NewEpisodeWorker(context: Context, params: WorkerParameters) : Worker(cont
         val ctx = applicationContext
         val manager = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
+            // Kenh UU TIEN CAO + hien noi dung tren man hinh khoa:
+            // ban cu dung IMPORTANCE_DEFAULT nen nhieu may de im lang
+            // trong thong bao thuong, khoa man hinh la khong thay.
+            // (Kenh da tao thi khong doi duoc muc uu tien nua nen ban
+            // nay dung ten kenh moi "tap_moi_cao".)
             val channel = NotificationChannel(
-                CHANNEL_ID, "Tập mới", NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = "Thông báo khi phim yêu thích có tập mới" }
+                CHANNEL_ID, "Tập mới", NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Thông báo khi phim yêu thích có tập mới"
+                lockscreenVisibility = android.app.Notification.VISIBILITY_PUBLIC
+                enableVibration(true)
+            }
             manager.createNotificationChannel(channel)
         }
         val intent = Intent(ctx, DetailActivity::class.java).apply {
@@ -68,6 +77,9 @@ class NewEpisodeWorker(context: Context, params: WorkerParameters) : Worker(cont
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Tập mới: ${movie.title}")
             .setContentText("Đã có $total tập. Chạm để xem ngay.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pending)
             .build()
@@ -75,6 +87,6 @@ class NewEpisodeWorker(context: Context, params: WorkerParameters) : Worker(cont
     }
 
     companion object {
-        const val CHANNEL_ID = "tap_moi"
+        const val CHANNEL_ID = "tap_moi_cao"
     }
 }

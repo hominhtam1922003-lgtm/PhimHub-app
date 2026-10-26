@@ -27,12 +27,32 @@ object ImageLoader {
         )
     }
 
+    /**
+     * Anh bia trong luoi/danh sach: chi tai dung co o hien thi
+     * (toi da 480x720) thay vi anh goc full-size — nhe mang + giai
+     * ma nhanh hon nhieu khi cuon danh sach dai.
+     */
     fun cover(iv: ImageView, url: String) {
         if (url.isEmpty()) {
             iv.setImageResource(R.drawable.bg_poster)
             return
         }
         Glide.with(iv).load(glideUrl(url))
+            .override(480, 720)
+            .placeholder(R.drawable.bg_poster)
+            .error(R.drawable.bg_poster)
+            .centerCrop()
+            .into(iv)
+    }
+
+    /** Anh nen lon o dau trang chi tiet (rong toan man hinh). */
+    fun backdrop(iv: ImageView, url: String) {
+        if (url.isEmpty()) {
+            iv.setImageResource(R.drawable.bg_poster)
+            return
+        }
+        Glide.with(iv).load(glideUrl(url))
+            .override(1080, 720)
             .placeholder(R.drawable.bg_poster)
             .error(R.drawable.bg_poster)
             .centerCrop()

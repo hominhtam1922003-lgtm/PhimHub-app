@@ -219,6 +219,16 @@ class HomeFragment : Fragment() {
                     // Bao loi o duoi
                 }
             }
+            if (sections.isNotEmpty()) {
+                // Tai truoc trang 1 cua 3 tab duyet chinh vao cache:
+                // bam sang tab Phim le/Phim bo/Chieu rap la co phim
+                // ngay, khoi quay vong xoay (cache song 3 phut)
+                thread {
+                    Sources.prefetchBrowse("phim-le", mapOf("type" to "movie"))
+                    Sources.prefetchBrowse("phim-bo", mapOf("type" to "series"))
+                    Sources.prefetchBrowse("phim-chieu-rap", mapOf("genres" to "25"))
+                }
+            }
             activity?.runOnUiThread {
                 loading = false
                 swipe.isRefreshing = false
