@@ -21,6 +21,17 @@ class FavoritesFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        refresh()
+    }
+
+    // Tab duoc an/hien (khong tao lai) nen onResume khong chay lai khi
+    // quay ve tab: nap lai danh sach tai day de thay phim moi them/xoa
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) refresh()
+    }
+
+    private fun refresh() {
         // Mo tab Yeu thich cung la luc xin quyen thong bao (de bao tap moi)
         if (activity is MainActivity) (activity as MainActivity).ensureNotificationPermission()
         val v = view ?: return
@@ -54,6 +65,16 @@ class HistoryFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
+        refresh()
+    }
+
+    // Xem HistoryFragment ly do giong FavoritesFragment o tren
+    override fun onHiddenChanged(hidden: Boolean) {
+        super.onHiddenChanged(hidden)
+        if (!hidden) refresh()
+    }
+
+    private fun refresh() {
         val v = view ?: return
         val rv = v.findViewById<RecyclerView>(R.id.rvList)
         val tv = v.findViewById<TextView>(R.id.tvEmpty)

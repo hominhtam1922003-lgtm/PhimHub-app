@@ -40,6 +40,20 @@ class HomeFragment : Fragment() {
         private var items: List<HomeItem>
     ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
+        // ViewHolder co cache view: truoc day moi lan bind deu
+        // findViewById 4 lan + dung holder vo danh -> cuon danh sach
+        // dai rat de giat
+        inner class HeaderVH(v: View) : RecyclerView.ViewHolder(v) {
+            val tv: TextView = v as TextView
+        }
+
+        inner class MovieVH(v: View) : RecyclerView.ViewHolder(v) {
+            val iv: ImageView = v.findViewById(R.id.ivCover)
+            val tvTitle: TextView = v.findViewById(R.id.tvTitle)
+            val tvSub: TextView = v.findViewById(R.id.tvLatest)
+            val tvBadge: TextView = v.findViewById(R.id.tvSourceBadge)
+        }
+
         override fun getItemViewType(position: Int): Int =
             if (items[position] is HomeItem.Header) 0 else 1
 
@@ -48,31 +62,24 @@ class HomeFragment : Fragment() {
         ): RecyclerView.ViewHolder {
             val inf = LayoutInflater.from(parent.context)
             return if (viewType == 0) {
-                object : RecyclerView.ViewHolder(
-                    inf.inflate(R.layout.item_section_header, parent, false)
-                ) {}
+                HeaderVH(inf.inflate(R.layout.item_section_header, parent, false))
             } else {
-                object : RecyclerView.ViewHolder(
-                    inf.inflate(R.layout.item_comic_grid, parent, false)
-                ) {}
+                MovieVH(inf.inflate(R.layout.item_comic_grid, parent, false))
             }
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             when (val item = items[position]) {
                 is HomeItem.Header -> {
-                    (holder.itemView as TextView).text = item.name
+                    (holder as HeaderVH).tv.text = item.name
                 }
                 is HomeItem.MovieItem -> {
+                    val h = holder as MovieVH
                     val m = item.movie
-                    holder.itemView.findViewById<TextView>(R.id.tvTitle).text = m.title
-                    holder.itemView.findViewById<TextView>(R.id.tvLatest).text = m.sub
-                    bindSourceBadge(
-                        holder.itemView.findViewById(R.id.tvSourceBadge), m.url
-                    )
-                    ImageLoader.cover(
-                        holder.itemView.findViewById(R.id.ivCover), m.poster
-                    )
+                    h.tvTitle.text = m.title
+                    h.tvSub.text = m.sub
+                    bindSourceBadge(h.tvBadge, m.url)
+                    ImageLoader.cover(h.iv, m.poster)
                     holder.itemView.setOnClickListener { openDetail(m) }
                 }
             }
@@ -83,6 +90,14 @@ class HomeFragment : Fragment() {
         fun submit(list: List<HomeItem>) {
             items = list
             notifyDataSetChanged()
+        }
+
+        /** Noi them ket qua tim kiem (tai them): chi chen phan moi. */
+        fun appendItems(more: List<HomeItem>) {
+            if (more.isEmpty()) return
+            val start = items.size
+            items = items + more
+            notifyItemRangeInserted(start, more.size)
         }
     }
 
@@ -129,6 +144,8 @@ class HomeFragment : Fragment() {
                 if (adapter.getItemViewType(position) == 0) 3 else 1
         }
         rv.layoutManager = glm
+        rv.setHasFixedSize(true)
+        rv.setItemViewCacheSize(12)
         adapter = HomeAdapter(emptyList())
         rv.adapter = adapter
 
@@ -303,7 +320,9 @@ class HomeFragment : Fragment() {
                     } else {
                         searchTotalPages = searchPage
                     }
-                    adapter.submit(searchMovies.map { HomeItem.MovieItem(it) })
+                    if (added.isNotEmpty()) {
+                        adapter.appendItems(added.map { HomeItem.MovieItem(it) })
+                    }
                 } else {
                     searchTotalPages = searchPage
                     Toast.makeText(

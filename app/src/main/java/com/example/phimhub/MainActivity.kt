@@ -49,32 +49,51 @@ class MainActivity : AppCompatActivity() {
             tabFavorites, tabHistory
         )
 
-        tabHome.setOnClickListener { select(tabHome); show(HomeFragment()) }
+        tabHome.setOnClickListener { select(tabHome); show("home") { HomeFragment() } }
         tabSingle.setOnClickListener {
             select(tabSingle)
-            show(BrowseFragment.newInstance(BrowseFragment.KIND_SINGLE))
+            show("single") { BrowseFragment.newInstance(BrowseFragment.KIND_SINGLE) }
         }
         tabSeries.setOnClickListener {
             select(tabSeries)
-            show(BrowseFragment.newInstance(BrowseFragment.KIND_SERIES))
+            show("series") { BrowseFragment.newInstance(BrowseFragment.KIND_SERIES) }
         }
         tabCinema.setOnClickListener {
             select(tabCinema)
-            show(BrowseFragment.newInstance(BrowseFragment.KIND_CINEMA))
+            show("cinema") { BrowseFragment.newInstance(BrowseFragment.KIND_CINEMA) }
         }
-        tabFilter.setOnClickListener { select(tabFilter); show(FilterFragment()) }
+        tabFilter.setOnClickListener { select(tabFilter); show("filter") { FilterFragment() } }
         tabFavorites.setOnClickListener {
             // Thong bao tap moi gan voi phim yeu thich:
             // chua co quyen thi xin lai tai day (Android 13+)
             ensureNotificationPermission()
             select(tabFavorites)
-            show(FavoritesFragment())
+            show("favorites") { FavoritesFragment() }
         }
-        tabHistory.setOnClickListener { select(tabHistory); show(HistoryFragment()) }
+        tabHistory.setOnClickListener {
+            select(tabHistory)
+            show("history") { HistoryFragment() }
+        }
 
         if (savedInstanceState == null) {
             select(tabHome)
-            show(HomeFragment())
+            show("home") { HomeFragment() }
+        } else {
+            // Activity duoc khoi phuc (xoay may / bi thu hoi roi mo lai):
+            // to mau dung tab cua fragment dang hien
+            val visibleTag = supportFragmentManager.fragments
+                .firstOrNull { !it.isHidden }?.tag
+            select(
+                when (visibleTag) {
+                    "single" -> tabSingle
+                    "series" -> tabSeries
+                    "cinema" -> tabCinema
+                    "filter" -> tabFilter
+                    "favorites" -> tabFavorites
+                    "history" -> tabHistory
+                    else -> tabHome
+                }
+            )
         }
 
         ensureNotificationPermission()
@@ -102,10 +121,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun show(fragment: Fragment) {
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.container, fragment)
-            .commit()
+    private val fragCache = HashMap<String, Fragment>()
+
+    private fun obtain(tag: String, create: () -> Fragment): Fragment {
+        supportFragmentManager.findFragmentByTag(tag)?.let { return it }
+        return fragCache.getOrPut(tag) { create() }
+    }
+
+    /**
+     * Chuyen tab bang AN/HIEN: moi fragment chi tao 1 lan va giu nguyen
+     * trang thai (du lieu da tai, vi tri cuon, trang da tai them) —
+     * truoc day moi lan bam tab la replace() fragment moi, tai lai tu
+     * dau qua mang nen chuyen tab rat cham.
+     */
+    private fun show(tag: String, create: () -> Fragment) {
+        val target = obtain(tag, create)
+        val tx = supportFragmentManager.beginTransaction()
+        for (f in supportFragmentManager.fragments) {
+            if (f !== target && !f.isHidden) tx.hide(f)
+        }
+        if (target.isAdded) tx.show(target) else tx.add(R.id.container, target, tag)
+        tx.commit()
     }
 
     fun ensureNotificationPermission() {

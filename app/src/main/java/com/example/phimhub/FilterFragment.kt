@@ -147,16 +147,23 @@ class FilterFragment : Fragment() {
             RemoteConfig.awaitReady(2500)
             var genres: List<Taxon> = emptyList()
             var regions: List<Taxon> = emptyList()
-            try {
-                genres = CobeSource.fetchCategories()
-            } catch (e: Exception) {
-                // Bao loi o duoi
+            // The loai va quoc gia tai song song (truoc day tuan tu)
+            val tg = kotlin.concurrent.thread {
+                try {
+                    genres = CobeSource.fetchCategories()
+                } catch (e: Exception) {
+                    // Bao loi o duoi
+                }
             }
-            try {
-                regions = CobeSource.fetchRegions()
-            } catch (e: Exception) {
-                // Bao loi o duoi
+            val tr = kotlin.concurrent.thread {
+                try {
+                    regions = CobeSource.fetchRegions()
+                } catch (e: Exception) {
+                    // Bao loi o duoi
+                }
             }
+            tg.join()
+            tr.join()
             if (genres.isNotEmpty()) cachedGenres = genres
             if (regions.isNotEmpty()) cachedRegions = regions
             activity?.runOnUiThread {

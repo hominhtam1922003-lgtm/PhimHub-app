@@ -95,6 +95,8 @@ class BrowseFragment : Fragment() {
         swipe = v.findViewById(R.id.swipeRefresh)
         val rv = v.findViewById<RecyclerView>(R.id.rvComics)
         rv.layoutManager = GridLayoutManager(requireContext(), 3)
+        rv.setHasFixedSize(true)
+        rv.setItemViewCacheSize(12)
         adapter = MovieGridAdapter(emptyList()) { openDetail(it) }
         rv.adapter = adapter
         btnLoadMore = v.findViewById(R.id.btnLoadMore)
@@ -227,7 +229,7 @@ class BrowseFragment : Fragment() {
                         items.addAll(added)
                         currentPage = next
                         totalPages = page.totalPages
-                        adapter.submit(items.toList())
+                        adapter.append(added)
                     } else if (page.movies.size >= pageSize()) {
                         // Trang day nhung trung het (phim moi cap nhat
                         // day phim cu sang trang sau): van di tiep

@@ -87,23 +87,32 @@ object CobeSource {
     // ---------------- HTTP JSON ----------------
 
     private fun getText(url: String): String {
-        var conn: HttpURLConnection? = null
-        try {
-            conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 12000
-                readTimeout = 20000
-                setRequestProperty("User-Agent", UA)
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("Accept-Language", "vi-VN,vi;q=0.9")
-            }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
-            if (code !in 200..299) throw Exception("HTTP $code")
-            return text
-        } finally {
-            conn?.disconnect()
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8000
+            readTimeout = 15000
+            setRequestProperty("User-Agent", UA)
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept-Language", "vi-VN,vi;q=0.9")
+            // JSON nen gzip rat tot (API tra Content-Encoding: gzip —
+            // da kiem chung truc tiep): giam ~60-80% dung luong tai,
+            // rieng trang danh sach tap ~1,7 MB nen con manh hon nua
+            setRequestProperty("Accept-Encoding", "gzip")
         }
+        val code = conn.responseCode
+        val raw = if (code in 200..299) conn.inputStream else conn.errorStream
+        val stream = if (raw != null &&
+            conn.getHeaderField("Content-Encoding")?.contains("gzip", true) == true
+        ) {
+            java.util.zip.GZIPInputStream(raw)
+        } else {
+            raw
+        }
+        val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+        if (code !in 200..299) throw Exception("HTTP $code")
+        return text
+        // Khong disconnect(): doc het body + dong stream la du dieu kien
+        // de HttpURLConnection giu ket noi trong pool tai su dung (keep-alive),
+        // cac request sau khoi phai bat tay TLS lai
     }
 
     private fun getJsonObject(path: String): JSONObject =
@@ -192,14 +201,30 @@ object CobeSource {
 
     /** Cac muc cua trang chu dung nhu tren web ("Phim Song Ngu", ...). */
     fun fetchHomeSections(): List<HomeSection> {
+        // Trang 1 tai truoc (cho biet tong so trang), cac trang con lai
+        // (toi da 3) tai SONG SONG — truoc day tai tuan tu tung trang
+        val first = getJsonObject("/lists/homepageLists?page=1&limit=15")
+        val totalPages = first.optJSONObject("result")?.optInt("totalPages", 1) ?: 1
+        val last = minOf(totalPages, 3)
+        val slots = arrayOfNulls<JSONObject>(last + 1)
+        slots[1] = first
+        if (last > 1) {
+            val threads = (2..last).map { p ->
+                kotlin.concurrent.thread {
+                    try {
+                        slots[p] = getJsonObject("/lists/homepageLists?page=$p&limit=15")
+                    } catch (e: Exception) {
+                        // Thieu 1 trang muc: giu cac trang con lai
+                    }
+                }
+            }
+            threads.forEach { it.join() }
+        }
         val out = ArrayList<HomeSection>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages && page <= 3) {
-            val o = getJsonObject("/lists/homepageLists?page=$page&limit=15")
-            val result = o.optJSONObject("result") ?: break
-            totalPages = result.optInt("totalPages", 1)
-            val cols = result.optJSONArray("collections") ?: break
+        for (p in 1..last) {
+            val o = slots[p] ?: continue
+            val result = o.optJSONObject("result") ?: continue
+            val cols = result.optJSONArray("collections") ?: continue
             for (i in 0 until cols.length()) {
                 val c = cols.optJSONObject(i) ?: continue
                 val movies = moviesFromArray(c.optJSONArray("movies"))
@@ -208,7 +233,6 @@ object CobeSource {
                     out.add(HomeSection(name, movies))
                 }
             }
-            page++
         }
         return out
     }
@@ -326,14 +350,28 @@ object CobeSource {
     fun fetchRegions(): List<Taxon> = fetchTaxons("/regions")
 
     private fun fetchTaxons(path: String): List<Taxon> {
+        // Trang 1 truoc (biet tong so trang), cac trang con lai song song
+        val first = getJsonObject("$path?limit=100&page=1")
+        val totalPages = first.optJSONObject("meta")?.optInt("totalPages", 1) ?: 1
+        val last = minOf(totalPages, 5)
+        val slots = arrayOfNulls<JSONObject>(last + 1)
+        slots[1] = first
+        if (last > 1) {
+            val threads = (2..last).map { p ->
+                kotlin.concurrent.thread {
+                    try {
+                        slots[p] = getJsonObject("$path?limit=100&page=$p")
+                    } catch (e: Exception) {
+                        // Thieu 1 trang: giu cac trang con lai
+                    }
+                }
+            }
+            threads.forEach { it.join() }
+        }
         val out = ArrayList<Taxon>()
-        var page = 1
-        var totalPages = 1
-        while (page <= totalPages && page <= 5) {
-            val o = getJsonObject("$path?limit=100&page=$page")
-            val meta = o.optJSONObject("meta")
-            totalPages = meta?.optInt("totalPages", 1) ?: 1
-            val data = o.optJSONArray("data") ?: break
+        for (p in 1..last) {
+            val o = slots[p] ?: continue
+            val data = o.optJSONArray("data") ?: continue
             for (i in 0 until data.length()) {
                 val t = data.optJSONObject(i) ?: continue
                 val id = t.optInt("id", 0)
@@ -342,7 +380,6 @@ object CobeSource {
                     out.add(Taxon(id, name, t.optString("slug")))
                 }
             }
-            page++
         }
         return out
     }

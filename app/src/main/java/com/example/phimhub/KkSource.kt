@@ -56,23 +56,31 @@ object KkSource {
     // ---------------- HTTP JSON ----------------
 
     private fun getText(url: String): String {
-        var conn: HttpURLConnection? = null
-        try {
-            conn = (URL(url).openConnection() as HttpURLConnection).apply {
-                connectTimeout = 12000
-                readTimeout = 20000
-                setRequestProperty("User-Agent", CobeSource.UA)
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("Accept-Language", "vi-VN,vi;q=0.9")
-            }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
-            if (code !in 200..299) throw Exception("HTTP $code")
-            return text
-        } finally {
-            conn?.disconnect()
+        val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 8000
+            readTimeout = 15000
+            setRequestProperty("User-Agent", CobeSource.UA)
+            setRequestProperty("Accept", "application/json")
+            setRequestProperty("Accept-Language", "vi-VN,vi;q=0.9")
+            // JSON nen gzip rat tot (API tra Content-Encoding: gzip —
+            // da kiem chung truc tiep): giam ~60-80% dung luong tai
+            setRequestProperty("Accept-Encoding", "gzip")
         }
+        val code = conn.responseCode
+        val raw = if (code in 200..299) conn.inputStream else conn.errorStream
+        val stream = if (raw != null &&
+            conn.getHeaderField("Content-Encoding")?.contains("gzip", true) == true
+        ) {
+            java.util.zip.GZIPInputStream(raw)
+        } else {
+            raw
+        }
+        val text = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() } ?: ""
+        if (code !in 200..299) throw Exception("HTTP $code")
+        return text
+        // Khong disconnect(): doc het body + dong stream la du dieu kien
+        // de HttpURLConnection giu ket noi trong pool tai su dung (keep-alive),
+        // cac request sau khoi phai bat tay TLS lai
     }
 
     private fun getJson(path: String): JSONObject = JSONObject(getText(API_BASE + path))
@@ -151,18 +159,23 @@ object KkSource {
             "phim-bo" to "Phim bộ mới",
             "hoat-hinh" to "Hoạt hình"
         )
-        val out = ArrayList<HomeSection>()
-        for ((slug, name) in defs) {
-            try {
-                val page = fetchList(slug, 1)
-                if (page.movies.isNotEmpty()) {
-                    out.add(HomeSection(name, page.movies.take(12)))
+        // 4 danh sach tai SONG SONG (giu nguyen thu tu muc khi ghep):
+        // truoc day tai tuan tu nen trang chu cho ca 4 luot lien tiep
+        val slots = arrayOfNulls<HomeSection>(defs.size)
+        val threads = defs.mapIndexed { i, (slug, name) ->
+            kotlin.concurrent.thread {
+                try {
+                    val page = fetchList(slug, 1)
+                    if (page.movies.isNotEmpty()) {
+                        slots[i] = HomeSection(name, page.movies.take(12))
+                    }
+                } catch (e: Exception) {
+                    // Bo qua muc loi, giu cac muc con lai
                 }
-            } catch (e: Exception) {
-                // Bo qua muc loi, giu cac muc con lai
             }
         }
-        return out
+        threads.forEach { it.join() }
+        return slots.filterNotNull()
     }
 
     // ---------------- Chi tiet + danh sach tap ----------------

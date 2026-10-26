@@ -17,6 +17,30 @@ object Sources {
 
     fun isKk(url: String): Boolean = KkSource.isKkUrl(url)
 
+    /**
+     * Chay 1 viec mang tren thread rieng va tra ket qua qua [join]
+     * (null neu viec do loi — dung de tai 2 nguon SONG SONG thay vi
+     * tuan tu: thoi gian cho bang luot cham nhat thay vi tong ca hai).
+     */
+    private class Fork<T>(block: () -> T) {
+        @Volatile
+        private var value: T? = null
+        private val t: Thread = kotlin.concurrent.thread {
+            value = try {
+                block()
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        fun join(): T? {
+            t.join()
+            return value
+        }
+    }
+
+    private fun <T> fork(block: () -> T): Fork<T> = Fork(block)
+
     /** Chuan hoa tua de so trung: bo dau, thuong, gon khoang trang. */
     fun normalizeTitle(t: String): String {
         var s = t.lowercase().replace('đ', 'd')
@@ -37,34 +61,24 @@ object Sources {
                 if (fresh.isNotEmpty()) out.add(HomeSection(s.name, fresh))
             }
         }
-        try {
-            addAll(KkSource.fetchHomeSections().map { HomeSection("KKPhim • " + it.name, it.movies) })
-        } catch (e: Exception) {
-            // Nguon KK loi: con cobephim o duoi
+        // 2 nguon tai song song; thu tu ghep van KKPhim truoc nhu cu
+        val kkFork = fork {
+            KkSource.fetchHomeSections().map { HomeSection("KKPhim • " + it.name, it.movies) }
         }
-        try {
-            addAll(CobeSource.fetchHomeSections())
-        } catch (e: Exception) {
-            // Giu cac muc da co
-        }
+        val cobeFork = fork { CobeSource.fetchHomeSections() }
+        kkFork.join()?.let { addAll(it) }
+        cobeFork.join()?.let { addAll(it) }
         return out
     }
 
     // ---------------- Tim kiem ----------------
 
     fun searchMerged(keyword: String, page: Int): SearchPage {
-        var kk: SearchPage? = null
-        var cobe: SearchPage? = null
-        try {
-            kk = KkSource.searchKeyword(keyword, page)
-        } catch (e: Exception) {
-            // Nguon KK loi trang nay: dung ket qua cobe
-        }
-        try {
-            cobe = CobeSource.searchKeyword(keyword, page)
-        } catch (e: Exception) {
-            // Nguon cobe loi trang nay: dung ket qua KK
-        }
+        // 2 nguon tim song song
+        val kkFork = fork { KkSource.searchKeyword(keyword, page) }
+        val cobeFork = fork { CobeSource.searchKeyword(keyword, page) }
+        val kk = kkFork.join()
+        val cobe = cobeFork.join()
         if (kk == null && cobe == null) throw Exception("Ca 2 nguon deu loi")
         val merged = ArrayList<Movie>()
         val seen = HashSet<String>()
@@ -84,18 +98,11 @@ object Sources {
      * xep truoc. 1 nguon loi trang nay thi nguon kia van tra ket qua.
      */
     fun browseMerged(kkType: String, cobeParams: Map<String, String>, page: Int): SearchPage {
-        var kk: SearchPage? = null
-        var cobe: SearchPage? = null
-        try {
-            kk = KkSource.fetchList(kkType, page)
-        } catch (e: Exception) {
-            // Nguon KK loi: dung cobe
-        }
-        try {
-            cobe = CobeSource.searchMovies(cobeParams, page)
-        } catch (e: Exception) {
-            // Nguon cobe loi: dung KK
-        }
+        // 2 nguon tai song song
+        val kkFork = fork { KkSource.fetchList(kkType, page) }
+        val cobeFork = fork { CobeSource.searchMovies(cobeParams, page) }
+        val kk = kkFork.join()
+        val cobe = cobeFork.join()
         if (kk == null && cobe == null) throw Exception("Ca 2 nguon deu loi")
         val merged = ArrayList<Movie>()
         val seen = HashSet<String>()
@@ -116,19 +123,30 @@ object Sources {
      */
     fun fetchDetailMerged(url: String, fallbackTitle: String = ""): MovieDetail {
         val primaryIsKk = isKk(url)
-        var primary: MovieDetail? = null
-        try {
-            primary = if (primaryIsKk) KkSource.fetchDetail(url) else CobeSource.fetchDetail(url)
-        } catch (e: Exception) {
-            // Thu cuu bang nguon con lai o duoi
+        // Chi tiet nguon chinh va viec tim ban sinh doi chay SONG SONG:
+        // ban sinh doi tim bang tua tren the phim (chinh la tua cua nguon
+        // chinh trong hau het truong hop); neu truot va tua that cua nguon
+        // chinh khac tua the thi tim lai bang tua that o duoi
+        val primaryFork = fork {
+            if (primaryIsKk) KkSource.fetchDetail(url) else CobeSource.fetchDetail(url)
         }
-        val titleForTwin = primary?.movie?.title ?: fallbackTitle
-        var twin: MovieDetail? = null
-        if (titleForTwin.isNotBlank()) {
-            try {
-                twin = findTwin(titleForTwin, primaryIsKk)
-            } catch (e: Exception) {
-                // Khong co ban sinh doi: dung 1 nguon
+        val twinFork = if (fallbackTitle.isNotBlank()) {
+            fork { findTwin(fallbackTitle, primaryIsKk) }
+        } else {
+            null
+        }
+        val primary = primaryFork.join()
+        var twin = twinFork?.join()
+        if (twin == null && primary != null) {
+            val realTitle = primary.movie.title
+            if (realTitle.isNotBlank() &&
+                (twinFork == null || normalizeTitle(realTitle) != normalizeTitle(fallbackTitle))
+            ) {
+                try {
+                    twin = findTwin(realTitle, primaryIsKk)
+                } catch (e: Exception) {
+                    // Khong co ban sinh doi: dung 1 nguon
+                }
             }
         }
         val base = primary ?: twin ?: throw Exception("Khong tai duoc chi tiet phim")

@@ -58,6 +58,14 @@ class MovieGridAdapter(
         items = list
         notifyDataSetChanged()
     }
+
+    /** Noi them 1 trang vao cuoi (tai them): chi ve lai phan moi chen. */
+    fun append(more: List<Movie>) {
+        if (more.isEmpty()) return
+        val start = items.size
+        items = items + more
+        notifyItemRangeInserted(start, more.size)
+    }
 }
 
 /** Danh sach dang dong (Yeu thich / Lich su). */
