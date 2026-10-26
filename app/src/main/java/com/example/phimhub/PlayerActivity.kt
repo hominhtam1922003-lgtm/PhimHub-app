@@ -523,13 +523,21 @@ class PlayerActivity : AppCompatActivity() {
             val emb = "https://player.phimapi.com/player/?url=" + watchUrl
             list.add(Candidate(Kind.EMBEDPAGE, emb, "KKPhim (embed)"))
         }
+        // Ban chet o nguon: xep cuoi danh sach kem nhan "loi nguon"
+        // nhu o finishProbe (van thay du server, tu dong khong nhay vao)
+        val dead = ArrayList<Candidate>()
         for (u in versionUrls) {
             if (u == watchUrl || list.any { it.url == u }) continue
             val k = kindOf(u)
-            // Embed da biet chet (streamc) thi bo han khoi danh sach
-            if (k == Kind.EMBEDPAGE && VersionCheck.cached(u) == false) continue
-            list.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
+            if (k == Kind.EMBEDPAGE && VersionCheck.cached(u) == false) {
+                dead.add(
+                    Candidate(k, u, (versionNameOf(u) ?: "Bản khác") + " · lỗi nguồn")
+                )
+            } else {
+                list.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
+            }
         }
+        list.addAll(dead)
         return list
     }
 
@@ -736,11 +744,9 @@ class PlayerActivity : AppCompatActivity() {
             // "khong co nguon" nhu thoi nguon cu.
             val out = ArrayList<Candidate>()
             for (c in list) out.add(Candidate(c.kind, c.url, "Luồng trực tiếp"))
-            // Ban dang xem lam ung vien trang embed: neu tien kiem
-            // tra da ket luan no la embed CHET (streamc) thi dung
-            // dua vao — dua vao chi lam player vong toi roi dung o
-            // man hinh den cua trang chet (dung loi nguoi dung gap:
-            // app tu nhay qua ban Thuyet minh da chet)
+            // Ban dang xem lam ung vien trang embed (neu tien kiem
+            // tra ket luan no da CHET thi xep vao nhom "loi nguon"
+            // o cuoi danh sach — xem ghi chu duoi)
             if (VersionCheck.cached(watchUrl) != false) {
                 out.add(
                     Candidate(
@@ -749,9 +755,24 @@ class PlayerActivity : AppCompatActivity() {
                     )
                 )
             }
+            // Cac ban da biet CHET o nguon (streamc): VAN de trong
+            // danh sach (xep CUOI, gan nhan "loi nguon") de nguoi
+            // dung thay du server va tu quyet dinh thu; nhung luong
+            // TU DONG khong bao gio nhay vao chung (handleCandidateError
+            // bo qua) — ban 1.4.1 an han chung di lam nguoi dung
+            // tuong app mat server Thuyet minh
+            val dead = ArrayList<Candidate>()
+            if (VersionCheck.cached(watchUrl) == false) {
+                dead.add(
+                    Candidate(
+                        Kind.EMBEDPAGE, watchUrl,
+                        (versionNameOf(watchUrl) ?: "Bản đang xem") + " · lỗi nguồn"
+                    )
+                )
+            }
             for (u in versionUrls) {
                 if (u == watchUrl) continue
-                if (out.any { it.url == u }) continue
+                if (out.any { it.url == u } || dead.any { it.url == u }) continue
                 // Ban chieu thuoc nguon khac co the la luong thang
                 // (KKPhim m3u8) chu khong phai trang embed: xep loai
                 // theo duoi file de phat dung duong
@@ -761,10 +782,18 @@ class PlayerActivity : AppCompatActivity() {
                     p.endsWith(".mp4") -> Kind.DIRECT
                     else -> Kind.EMBEDPAGE
                 }
-                // Embed da biet chet thi bo han khoi danh sach
-                if (k == Kind.EMBEDPAGE && VersionCheck.cached(u) == false) continue
-                out.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
+                if (k == Kind.EMBEDPAGE && VersionCheck.cached(u) == false) {
+                    dead.add(
+                        Candidate(
+                            k, u,
+                            (versionNameOf(u) ?: "Bản khác") + " · lỗi nguồn"
+                        )
+                    )
+                } else {
+                    out.add(Candidate(k, u, versionNameOf(u) ?: "Bản khác"))
+                }
             }
+            out.addAll(dead)
             candidates = out
             failedSet.clear()
             webRetried.clear()
@@ -971,10 +1000,31 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         Toast.makeText(this, "Server lỗi, đang đổi server khác...", Toast.LENGTH_SHORT).show()
-        var next = candidateIndex
-        do {
-            next = (next + 1) % candidates.size
-        } while (failedSet.contains(next))
+        // Tim ung vien ke tiep: chua loi + khong phai ban da biet
+        // CHET o nguon (luong tu dong khong bao gio nhay vao ban
+        // "loi nguon"; chi nguoi dung tu bam nut doi server moi vao)
+        var next = -1
+        for (step in 1..candidates.size) {
+            val idx = (candidateIndex + step) % candidates.size
+            if (failedSet.contains(idx)) continue
+            if (VersionCheck.cached(candidates[idx].url) == false) {
+                failedSet.add(idx)
+                continue
+            }
+            next = idx
+            break
+        }
+        if (next == -1) {
+            if (!errorToastShown) {
+                errorToastShown = true
+                Toast.makeText(
+                    this,
+                    "Bản này lỗi phát. Thử bản chiếu khác hoặc tập khác nhé.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            return
+        }
         playCandidate(next)
     }
 
