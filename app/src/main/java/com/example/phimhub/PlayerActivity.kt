@@ -427,8 +427,16 @@ class PlayerActivity : AppCompatActivity() {
         val path = watchUrl.substringBefore("?").lowercase()
         when {
             path.endsWith(".m3u8") || path.endsWith(".mp4") -> {
-                candidates = directCandidates()
-                playCandidate(0)
+                if (versionUrls.isEmpty()) {
+                    candidates = directCandidates()
+                    playCandidate(0)
+                } else {
+                    // Co cac ban chieu khac: van phai tien kiem tra —
+                    // luong thang cua KKPhim co the da chet o nguon
+                    // (404), chon phai ban chet thi chuyen sang ban
+                    // song truoc khi phat, khoi thu phat roi bao loi
+                    preCheckVersionsThenProbe()
+                }
             }
             watchUrl.contains("/embed/") -> preCheckVersionsThenProbe()
             else -> showNoSource()
@@ -488,14 +496,24 @@ class PlayerActivity : AppCompatActivity() {
         }
     }
 
-    /** Ban dang chon la embed chet ma co ban luong thang: chuyen sang. */
+    /** Ban dang chon da chet o nguon ma co ban phat duoc: chuyen sang. */
     private fun decideProbeTarget(urls: List<String>, direct: Map<String, Boolean>) {
         val selectedBlocked = direct[watchUrl] == false
         val firstDirect = urls.firstOrNull { direct[it] == true }
         if (selectedBlocked && firstDirect != null && firstDirect != watchUrl) {
             watchUrl = firstDirect
         }
-        probeRuntime()
+        // Diem den la luong thang thi phat theo nhanh luong thang,
+        // la trang embed thi do nguon nhu cu
+        val p = watchUrl.substringBefore("?").lowercase()
+        if (p.endsWith(".m3u8") || p.endsWith(".mp4")) {
+            candidates = directCandidates()
+            failedSet.clear()
+            webRetried.clear()
+            playCandidate(0)
+        } else {
+            probeRuntime()
+        }
     }
 
     /**

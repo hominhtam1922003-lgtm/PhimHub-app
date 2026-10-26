@@ -37,12 +37,18 @@ object VersionCheck {
         }
     }
 
-    /** true = luong thang, false = embed chet (streamc), null = khong chac. */
+    /** true = phat duoc, false = chet o nguon, null = khong chac. */
     private fun classifyNow(u: String): Boolean? {
-        // URL la file phat thang (ban KKPhim dang m3u8/mp4): chac chan
-        // la luong thang, khoi tai trang embed
         val p = u.substringBefore("?").lowercase()
-        if (p.endsWith(".m3u8") || p.endsWith(".mp4")) return true
+        if (p.endsWith(".m3u8") || p.endsWith(".mp4")) {
+            // Luong thang: THU TAI THAT bang dung thong so app se
+            // phat. Host KKPhim (a.kvp726.com) tra 404 cho ca file
+            // da chet lan IP bi chan — tu may nguoi dung, 404 nghia
+            // la app phat cung se loi, phai danh dau chet de chuyen
+            // ban khac ngay tu dau thay vi thu phat roi bao loi.
+            // Loi mang / ma khac (403...) -> khong ket luan.
+            return probeDirect(u)
+        }
         if (!u.contains("/embed")) return null
         return try {
             val html = httpGetText(u) ?: return null
@@ -56,6 +62,29 @@ object VersionCheck {
             }
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /** Thu tai 1 luong thang: chi lay ma trang thai, khong doc than. */
+    private fun probeDirect(u: String): Boolean? {
+        var conn: HttpURLConnection? = null
+        return try {
+            conn = (URL(u).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 5000
+                readTimeout = 6000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", CobeSource.UA)
+                setRequestProperty("Referer", CobeSource.BASE + "/")
+            }
+            when (conn.responseCode) {
+                in 200..399 -> true
+                404, 410 -> false
+                else -> null
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            conn?.disconnect()
         }
     }
 
